@@ -1,8 +1,8 @@
-FROM mcr.microsoft.com/playwright/node:22-jammy
+FROM ghcr.io/puppeteer/puppeteer:23.10.3
+
+USER root
 
 WORKDIR /app
-
-RUN apt-get update && apt-get install -y unzip
 
 COPY package*.json ./
 RUN npm install
