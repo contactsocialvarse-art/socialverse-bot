@@ -13,16 +13,14 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "http": "^0.0.1-security",
-    "imapflow": "^1.6.6",
-    "mailparser": "^3.9.15",
-    "playwright": "^1.62.1",
-    "puppeteer": "^25.5.0",
-    "socket.io": "^4.8.3"
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "imapflow": "^1.0.170",
+    "mailparser": "^3.7.1",
+    "playwright": "^1.40.0",
+    "socket.io": "^4.7.5"
   },
   "devDependencies": {
-    "concurrently": "^10.0.4"
+    "concurrently": "^8.2.2"
   }
 }
