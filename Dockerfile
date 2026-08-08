@@ -1,6 +1,4 @@
-FROM ghcr.io/puppeteer/puppeteer:23.10.3
-
-USER root
+FROM mcr.microsoft.com/playwright:v1.40.0-focal
 
 WORKDIR /app
 
