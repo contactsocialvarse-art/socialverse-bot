@@ -80,7 +80,8 @@
 </div>
 
 <script>
-    const socket = io('http://localhost:5000');
+    // 🔴 Render Live Server Connection
+    const socket = io('https://socialverse-bot.onrender.com');
 
     socket.on('bot-complete', (data) => {
         document.getElementById('startBtn').disabled = false;
@@ -91,7 +92,7 @@
             modalBody.innerHTML = '';
 
             if (data.mails.length === 0) {
-                modalBody.innerHTML = '<div style="text-align:center; padding: 20px; color: #777;">কোনো মেইল পাওয়া যায়নি বা ইনবক্স ফাঁকা।</div>';
+                modalBody.innerHTML = '<div style="text-align:center; padding: 20px; color: #777;">কোনো মেইল পাওয়া যায়নি বা ইনবক্স ফাঁকা।</div>';
             } else {
                 data.mails.forEach((mail) => {
                     modalBody.innerHTML += `
