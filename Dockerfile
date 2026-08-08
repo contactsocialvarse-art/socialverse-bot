@@ -1,6 +1,8 @@
-FROM mcr.microsoft.com/playwright:v1.40.0-focal
+FROM mcr.microsoft.com/playwright/node:22-jammy
 
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y unzip
 
 COPY package*.json ./
 RUN npm install
