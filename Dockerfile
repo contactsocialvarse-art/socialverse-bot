@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright/node:18-jammy
+FROM mcr.microsoft.com/playwright:v1.40.0-focal
 
 WORKDIR /app
 
@@ -7,6 +7,7 @@ RUN npm install
 
 COPY . .
 
+ENV PORT=5000
 EXPOSE 5000
 
 CMD ["node", "server.js"]
