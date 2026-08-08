@@ -1,13 +1,12 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
 app.use(cors());
 
-// Azure App Configurations (এখানে তোমার তথ্যগুলো বসাও)
+// Render Environment Variables থেকে রিড করবে
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const TENANT_ID = process.env.TENANT_ID;
@@ -31,16 +30,27 @@ async function fetchMailsViaAzure(targetEmail) {
             grant_type: 'client_credentials'
         });
 
-        const tokenRes = await axios.post(tokenUrl, params);
-        const accessToken = tokenRes.data.access_token;
+        const tokenRes = await fetch(tokenUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        });
+
+        const tokenData = await tokenRes.json();
+        if (!tokenRes.ok) throw new Error(tokenData.error_description || 'Token Fetch Failed');
+        
+        const accessToken = tokenData.access_token;
 
         // ২. মেইল এক্সট্র্যাক্ট করা
         const mailUrl = `https://graph.microsoft.com/v1.0/users/${targetEmail}/messages?$top=5&$select=subject,sender,bodyPreview,receivedDateTime`;
-        const mailRes = await axios.get(mailUrl, {
+        const mailRes = await fetch(mailUrl, {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
 
-        const mails = mailRes.data.value.map((msg, index) => ({
+        const mailData = await mailRes.json();
+        if (!mailRes.ok) throw new Error(mailData.error?.message || 'Mail Fetch Failed');
+
+        const mails = mailData.value.map((msg, index) => ({
             id: index + 1,
             subject: msg.subject,
             from: msg.sender?.emailAddress?.address || 'Unknown',
@@ -53,7 +63,7 @@ async function fetchMailsViaAzure(targetEmail) {
         return { 
             success: false, 
             email: targetEmail, 
-            message: error.response?.data?.error?.message || error.message 
+            message: error.message 
         };
     }
 }
