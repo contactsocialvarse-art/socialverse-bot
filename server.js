@@ -1,111 +1,79 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { ImapFlow } = require('imapflow');
-const { simpleParser } = require('mailparser');
+const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
 app.use(cors());
 
-// হেলথ চেক রুট (Render Active রাখার জন্য)
+// Azure App Configurations (এখানে তোমার তথ্যগুলো বসাও)
+const CLIENT_ID = 'YOUR_CLIENT_ID_HERE';
+const CLIENT_SECRET = '3X28Q~UPscDNwo2B7p94f815LxCnFXVQu2ctpba7';
+const TENANT_ID = 'YOUR_TENANT_ID_HERE';
+
 app.get('/', (req, res) => {
-    res.send('Socialverse IMAP Backend Server is Running!');
+    res.send('Socialverse Azure Graph API Backend is Running!');
 });
 
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*" }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
-// IMAP দিয়ে একটি অ্যাকাউন্ট থেকে মেইল রিড করার ফাংশন
-async function fetchMailsIMAP(email, password) {
-    const client = new ImapFlow({
-        host: 'outlook.office365.com',
-        port: 993,
-        secure: true,
-        auth: {
-            user: email,
-            pass: password
-        },
-        logger: false
-    });
-
+// Azure Graph API দিয়ে মেইল রিড করার ফাংশন
+async function fetchMailsViaAzure(targetEmail) {
     try {
-        await client.connect();
+        // ১. Access Token নেওয়া
+        const tokenUrl = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
+        const params = new URLSearchParams({
+            client_id: CLIENT_ID,
+            client_secret: CLIENT_SECRET,
+            scope: 'https://graph.microsoft.com/.default',
+            grant_type: 'client_credentials'
+        });
 
-        // INBOX ফোল্ডার লক/ওপেন করা
-        let lock = await client.getMailboxLock('INBOX');
-        let extractedMails = [];
+        const tokenRes = await axios.post(tokenUrl, params);
+        const accessToken = tokenRes.data.access_token;
 
-        try {
-            // ইনবক্সের তথ্য নেওয়া
-            let status = await client.status('INBOX', { messages: true });
-            let totalMessages = status.messages;
+        // ২. মেইল এক্সট্র্যাক্ট করা
+        const mailUrl = `https://graph.microsoft.com/v1.0/users/${targetEmail}/messages?$top=5&$select=subject,sender,bodyPreview,receivedDateTime`;
+        const mailRes = await axios.get(mailUrl, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
 
-            if (totalMessages > 0) {
-                // সর্বশেষ ৫টি থেকে ১০টি মেইলের রেঞ্জ তৈরি করা
-                let fetchRange = `${Math.max(1, totalMessages - 9)}:*`;
-                
-                let count = 1;
-                for await (let message of client.fetch(fetchRange, { envelope: true, source: true })) {
-                    // মেইলের বডি পার্স করা
-                    let parsed = await simpleParser(message.source);
-                    
-                    let subject = parsed.subject || message.envelope.subject || 'No Subject';
-                    let from = parsed.from ? parsed.from.text : (message.envelope.from ? message.envelope.from[0].address : 'Unknown');
-                    let textContent = parsed.text || parsed.html || 'No Content';
+        const mails = mailRes.data.value.map((msg, index) => ({
+            id: index + 1,
+            subject: msg.subject,
+            from: msg.sender?.emailAddress?.address || 'Unknown',
+            content: `From: ${msg.sender?.emailAddress?.address} | Subject: ${msg.subject} | Preview: ${msg.bodyPreview}`
+        }));
 
-                    extractedMails.unshift({
-                        id: count++,
-                        subject: subject,
-                        from: from,
-                        content: `From: ${from} | Subject: ${subject} | Body: ${textContent.substring(0, 300)}...`
-                    });
-                }
-            }
-        } finally {
-            lock.release();
-        }
-
-        await client.logout();
-        return { success: true, email, mails: extractedMails };
+        return { success: true, email: targetEmail, mails };
 
     } catch (error) {
-        try { await client.logout(); } catch(e){}
         return { 
             success: false, 
-            email, 
-            message: error.message.includes('AUTHENTICATIONFAILED') 
-                ? 'আইডি বা পাসওয়ার্ড ভুল অথবা App Password / Modern Auth প্রয়োজন।' 
-                : error.message 
+            email: targetEmail, 
+            message: error.response?.data?.error?.message || error.message 
         };
     }
 }
 
 io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
-
     socket.on('start-bot', async (data) => {
-        let credentials = [];
+        let emails = [];
         
         if (typeof data === 'string') {
-            credentials = data.split('\n').filter(line => line.trim() !== '').map(line => {
-                const [email, password] = line.split('|');
-                return { email: email?.trim(), password: password?.trim() };
-            });
-        } else if (data.email && data.password) {
-            credentials = [{ email: data.email, password: data.password }];
+            emails = data.split('\n').map(line => line.split('|')[0].trim()).filter(Boolean);
+        } else if (data.email) {
+            emails = [data.email.trim()];
         }
 
         let allResults = [];
 
-        for (const cred of credentials) {
-            if (cred.email && cred.password) {
-                socket.emit('bot-status', { status: `Connecting IMAP for: ${cred.email}` });
-                const result = await fetchMailsIMAP(cred.email, cred.password);
-                allResults.push(result);
-            }
+        for (const email of emails) {
+            socket.emit('bot-status', { status: `Reading mails via Azure API for: ${email}` });
+            const result = await fetchMailsViaAzure(email);
+            allResults.push(result);
         }
 
         socket.emit('bot-complete', {
@@ -117,5 +85,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-    console.log(`IMAP Server running on port ${PORT}`);
+    console.log(`Azure Graph API Server running on port ${PORT}`);
 });
