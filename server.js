@@ -8,9 +8,9 @@ const app = express();
 app.use(cors());
 
 // Azure App Configurations (এখানে তোমার তথ্যগুলো বসাও)
-const CLIENT_ID = 'YOUR_CLIENT_ID_HERE';
-const CLIENT_SECRET = '3X28Q~UPscDNwo2B7p94f815LxCnFXVQu2ctpba7';
-const TENANT_ID = 'YOUR_TENANT_ID_HERE';
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const TENANT_ID = process.env.TENANT_ID;
 
 app.get('/', (req, res) => {
     res.send('Socialverse Azure Graph API Backend is Running!');
