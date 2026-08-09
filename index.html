@@ -1,12 +1,13 @@
 <script>
-    // 🔴 Render Live Server Connection
-    const socket = io('https://social-verse-bot.onrender.com');
+    // 🔴 Render Live Server Link
+    const socket = io('https://socialverse-bot.onrender.com');
 
-    // ব্যাকএন্ড থেকে প্রোগ্রেস স্ট্যাটাস পাওয়ার জন্য
+    // স্ট্যাটাস ট্র্যাকিং
     socket.on('bot-status', (data) => {
         document.getElementById('loader').innerText = `⏳ ${data.status}`;
     });
 
+    // ফলাফল ডিসপ্লে করা
     socket.on('bot-complete', (data) => {
         document.getElementById('startBtn').disabled = false;
         document.getElementById('loader').style.display = 'none';
@@ -17,41 +18,50 @@
         if (data.success && data.results && data.results.length > 0) {
             data.results.forEach((acc) => {
                 if (acc.success) {
-                    if (acc.mails.length === 0) {
-                        modalBody.innerHTML += `<div class="mail-box"><b> Account: ${acc.email}</b><br>কোনো মেইল পাওয়া যায়নি বা ইনবক্স ফাঁকা।</div>`;
+                    if (!acc.mails || acc.mails.length === 0) {
+                        modalBody.innerHTML += `
+                            <div class="mail-box">
+                                <b>📧 Account: ${acc.email}</b><br>
+                                <span style="color: #e67e22;">ইনবক্স ফাঁকা অথবা কোনো নতুন মেইল পাওয়া যায়নি।</span>
+                            </div>`;
                     } else {
                         acc.mails.forEach((mail) => {
                             modalBody.innerHTML += `
                                 <div class="mail-box">
-                                    <b> Account: ${acc.email} | #Mail ${mail.id}:</b>
-                                    ${mail.content}
+                                    <b>📧 Account: ${acc.email} | Mail #${mail.id}</b><br>
+                                    <strong>Subject:</strong> ${mail.subject}<br>
+                                    <strong>Content:</strong> ${mail.content}
                                 </div>
                             `;
                         });
                     }
                 } else {
-                    modalBody.innerHTML += `<div class="mail-box" style="border-left-color: red;"><b> Account: ${acc.email}</b><br>Error: ${acc.message}</div>`;
+                    modalBody.innerHTML += `
+                        <div class="mail-box" style="border-left-color: #ff4757;">
+                            <b>❌ Account: ${acc.email}</b><br>
+                            <span style="color: #ff4757;">${acc.message}</span>
+                        </div>`;
                 }
             });
 
             document.getElementById('modalOverlay').style.display = 'flex';
         } else {
-            alert(data.message || "কোনো ডাটা প্রসেস করা যায়নি!");
+            alert(data.message || "কোনো ডাটা প্রসেস করা সম্ভব হয়নি!");
         }
     });
 
     function startBot() {
         const inputData = document.getElementById('credentials').value.trim();
         if (!inputData) {
-            alert("email|password প্রদান করুন!");
+            alert("অনুগ্রহ করে ইমেইল ও পাসওয়ার্ড প্রদান করুন!");
             return;
         }
 
         document.getElementById('startBtn').disabled = true;
-        document.getElementById('loader').innerText = '⏳ মেইল প্রসেস করা হচ্ছে, অনুগ্রহ করে অপেক্ষা করুন...';
+        document.getElementById('loader').innerText = '⏳ ব্রাউজার ব্যাকগ্রাউন্ডে চালু হচ্ছে...';
         document.getElementById('loader').style.display = 'block';
 
-        // ব্যাকএন্ডে পুরো টেক্সট ডেটা সরাসরি পাঠানো (সিঙ্গেল ও মাল্টিপল দুটোই কাজ করবে)
+        // ব্যাকএন্ডে বাল্ক ডাটা পাঠানো
         socket.emit('start-bot', inputData);
     }
 
