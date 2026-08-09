@@ -1,16 +1,4 @@
-{
-  "name": "website-email-reader",
-  "version": "1.0.0",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "render-postbuild": "npx playwright install chromium --with-deps"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "p-limit": "^3.1.0",
-    "playwright": "^1.42.1",
-    "socket.io": "^4.7.5"
-  }
+"scripts": {
+  "start": "node server.js",
+  "build": "npx playwright install chromium --with-deps"
 }
