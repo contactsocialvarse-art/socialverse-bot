@@ -11,14 +11,14 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-// একসাথে ৩টি ব্রাউজার সমান্তরালে কাজ করবে (সার্ভার মেমোরি ঠিক রাখার জন্য)
-const limit = pLimit(3);
+const limit = pLimit(2); // দৃশ্যমান মোডে ৩টির বদলে ২টি প্রসেস রাখাই ভালো
 
-async function autoLoginAndFetchMail(email, password) {
+async function autoLoginAndFetchMail(email, password, isHeadless) {
     let browser;
     try {
+        // isHeadless সত্য হলে ব্যাকগ্রাউন্ডে, মিথ্যা হলে ব্রাউজার খুলে দেখাবে
         browser = await chromium.launch({ 
-            headless: true, // ব্যাকগ্রাউন্ডে চলবে
+            headless: isHeadless, 
             args: ['--no-sandbox', '--disable-setuid-sandbox'] 
         });
         const context = await browser.newContext();
@@ -46,12 +46,12 @@ async function autoLoginAndFetchMail(email, password) {
         await page.goto('https://outlook.live.com/mail/0/', { waitUntil: 'domcontentloaded', timeout: 60000 });
         await page.waitForTimeout(5000);
 
-        // ৫. মেইলের তালিকা স্ক্র্যাপ করা
+        // ৫. মেইল এক্সট্র্যাক্ট করা
         const mails = await page.evaluate(() => {
             const mailElements = document.querySelectorAll('div[role="option"]');
             let extracted = [];
             mailElements.forEach((el, index) => {
-                if (index < 5) { // লেটেস্ট ৫টি মেইল
+                if (index < 5) {
                     extracted.push({
                         id: index + 1,
                         subject: el.innerText.split('\n')[0] || 'No Subject',
@@ -70,16 +70,18 @@ async function autoLoginAndFetchMail(email, password) {
         return { 
             success: false, 
             email, 
-            message: 'Login Failed or Captcha/2FA Required!' 
+            message: 'Login Failed or Captcha Required!' 
         };
     }
 }
 
 io.on('connection', (socket) => {
-    socket.on('start-bot', async (inputData) => {
-        // ইনপুট ফরম্যাট: email|password (প্রতি লাইনে একটি)
+    socket.on('start-bot', async (payload) => {
+        // payload-এ ইনপুট টেক্সট এবং মোড অপশন আসবে
+        const inputData = typeof payload === 'string' ? payload : payload.credentials;
+        const isHeadless = payload.isHeadless !== undefined ? payload.isHeadless : true;
+
         const lines = inputData.split('\n').filter(line => line.trim() !== '');
-        
         const accounts = lines.map(line => {
             const [email, pass] = line.split('|').map(s => s?.trim());
             return { email, pass };
@@ -90,13 +92,12 @@ io.on('connection', (socket) => {
             return;
         }
 
-        socket.emit('bot-status', { status: `মোট ${accounts.length} টি অ্যাকাউন্ট প্রসেস করা হচ্ছে...` });
+        socket.emit('bot-status', { status: `প্রসেসিং শুরু হচ্ছে... (Headless: ${isHeadless ? 'ON' : 'OFF'})` });
 
-        // বাল্ক প্রসেসিং
         const tasks = accounts.map(acc => 
             limit(async () => {
-                socket.emit('bot-status', { status: `লগইন করা হচ্ছে: ${acc.email}` });
-                return await autoLoginAndFetchMail(acc.email, acc.pass);
+                socket.emit('bot-status', { status: `লগইন চেষ্টা চলছে: ${acc.email}` });
+                return await autoLoginAndFetchMail(acc.email, acc.pass, isHeadless);
             })
         );
 
