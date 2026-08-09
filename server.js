@@ -11,17 +11,28 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const limit = pLimit(2); // দৃশ্যমান মোডে ৩টির বদলে ২টি প্রসেস রাখাই ভালো
+const limit = pLimit(2);
 
 async function autoLoginAndFetchMail(email, password, isHeadless) {
     let browser;
     try {
-        // isHeadless সত্য হলে ব্যাকগ্রাউন্ডে, মিথ্যা হলে ব্রাউজার খুলে দেখাবে
+        // Render ক্লাউডের জন্য নির্দিষ্ট লঞ্চ আর্গুমেন্ট
         browser = await chromium.launch({ 
             headless: isHeadless, 
-            args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu'
+            ] 
         });
-        const context = await browser.newContext();
+
+        const context = await browser.newContext({
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        });
         const page = await context.newPage();
 
         // ১. আউটলুক লগইন পেজে যাওয়া
@@ -30,21 +41,26 @@ async function autoLoginAndFetchMail(email, password, isHeadless) {
         // ২. ইমেইল ইনপুট
         await page.fill('input[type="email"]', email);
         await page.click('input[type="submit"]');
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(2500);
 
         // ৩. পাসওয়ার্ড ইনপুট
         await page.fill('input[type="password"]', password);
         await page.click('input[type="submit"]');
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(4000);
 
-        // Stay Signed In থাকলে Yes দেওয়া
-        if (await page.$('input[id="acceptButton"]')) {
-            await page.click('input[id="acceptButton"]');
+        // Stay Signed In আসলে Yes চাপবে
+        try {
+            if (await page.$('input[id="acceptButton"]')) {
+                await page.click('input[id="acceptButton"]');
+                await page.waitForTimeout(2000);
+            }
+        } catch (e) {
+            // Ignored if prompt doesn't appear
         }
 
-        // ৪. ইনবক্সে যাওয়া
+        // ৪. সরাসরি ইনবক্সে যাওয়া
         await page.goto('https://outlook.live.com/mail/0/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await page.waitForTimeout(5000);
+        await page.waitForTimeout(6000);
 
         // ৫. মেইল এক্সট্র্যাক্ট করা
         const mails = await page.evaluate(() => {
@@ -70,14 +86,13 @@ async function autoLoginAndFetchMail(email, password, isHeadless) {
         return { 
             success: false, 
             email, 
-            message: 'Login Failed or Captcha Required!' 
+            message: 'লগইন ব্যর্থ হয়েছে বা 2FA/CAPTCHA আবশ্যক!' 
         };
     }
 }
 
 io.on('connection', (socket) => {
     socket.on('start-bot', async (payload) => {
-        // payload-এ ইনপুট টেক্সট এবং মোড অপশন আসবে
         const inputData = typeof payload === 'string' ? payload : payload.credentials;
         const isHeadless = payload.isHeadless !== undefined ? payload.isHeadless : true;
 
